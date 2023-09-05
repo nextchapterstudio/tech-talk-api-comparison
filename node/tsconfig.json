@@ -1,0 +1,16 @@
+{
+    "compilerOptions": {
+      "outDir": "dist", // output compiled js files to ./dist
+      "strict": true, // enforces strict mode type checking behaviours
+      "lib": ["ES2021"], //https://www.typescriptlang.org/tsconfig#lib
+      "esModuleInterop": true, // https://www.typescriptlang.org/tsconfig#esModuleInterop
+      "baseUrl": "./src/", // makes imports reletive to index file.
+      "module": "commonjs", // compile to commonJS
+      "moduleResolution": "node", // 'node' is the commonJS resolutoin strategy
+      "skipLibCheck": true //https://www.typescriptlang.org/tsconfig#skipLibCheck
+      // This can save time during compilation at the expense of type-system accuracy
+    },
+    "ts-node": {
+      "require": ["tsconfig-paths/register"]
+    }
+  }
