@@ -1,46 +1,73 @@
-import express from 'express';
-const app = express()
-const port = 3001
+import express from "express";
+import { Pool } from "pg";
+import { drizzle } from "drizzle-orm/node-postgres";
+import {
+  integer,
+  pgTable,
+  serial,
+  text,
+  timestamp,
+  varchar,
+  boolean,
+} from "drizzle-orm/pg-core";
+import { eq } from "drizzle-orm";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 
-type todoItem = {
-    id: number,
-    description: string,
-    completed: boolean,
-}
-const todoList : todoItem[] = []
+const app = express();
+const port = 3001;
+const pool = new Pool({
+  connectionString:
+    "postgres://splash_app_user:postgresPW@localhost:5455/postgresDB",
+});
+const db = drizzle(pool);
 
-let counter = 0;
+export const todos = pgTable("todo", {
+  id: serial("id").primaryKey(),
+  description: text("description").notNull(),
+  completed: boolean("completed").notNull().default(false),
+});
 
-app.use(express.json())
+type Todo = typeof todos.$inferInsert;
 
-app.get('/get-items', (req, res) => {
-  res.json(todoList)
-})
+app.use(express.json());
 
-app.post('/create-item', (req, res)=>{
-    const item = {
-        id: counter++,
-        description : req.body.description,
-        completed: false,
-    }
+app.get("/get-items", async (req, res) => {
+  const todoList = await db.select().from(todos);
+  return res.json(todoList);
+});
 
-    todoList.push(item)
-    res.json(item)
-})
+app.post("/create-item", async (req, res) => {
+  const todo: Todo = { description: "use drizzle" };
 
-app.post('/toggle-item/:id', (req, res) =>{
-    
-    const item = todoList.find((item)=>{
-       return Number(req.params.id) == item.id
+  const result = await db.insert(todos).values(todo).returning();
+  return res.json(result);
+});
+
+app.post("/toggle-item/:id", async (req, res) => {
+  const foundTodos = await db
+    .select({
+      id: todos.id,
+      completed: todos.completed,
     })
-    if (item !== undefined)
-    {
-        item.completed = !item.completed
-    } 
+    .from(todos)
+    .where(eq(todos.id, Number(req.params.id)));
 
-    res.json(item)
-})
+  if (foundTodos.length == 0) {
+    return res.status(404);
+  }
 
-app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`)
-})
+  const item = await db
+    .update(todos)
+    .set({
+      completed: !foundTodos[0].completed,
+    })
+    .returning();
+
+  res.json(item);
+});
+
+migrate(db, { migrationsFolder: "./drizzle" }).then(() => {
+  app.listen(port, () => {
+    console.log(`Example app listening on port ${port}`);
+  });
+});
