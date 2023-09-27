@@ -1,23 +1,14 @@
+import { eq, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { boolean, pgTable, serial, text } from "drizzle-orm/pg-core";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import express from "express";
 import { Pool } from "pg";
-import { drizzle } from "drizzle-orm/node-postgres";
-import {
-  integer,
-  pgTable,
-  serial,
-  text,
-  timestamp,
-  varchar,
-  boolean,
-} from "drizzle-orm/pg-core";
-import { eq } from "drizzle-orm";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
 
 const app = express();
-const port = 3001;
+const port = 8080;
 const pool = new Pool({
-  connectionString:
-    "postgres://splash_app_user:postgresPW@localhost:5455/postgresDB",
+  connectionString: "postgres://postgres:changeme@localhost:5432/mydb",
 });
 const db = drizzle(pool);
 
@@ -44,23 +35,12 @@ app.post("/create-item", async (req, res) => {
 });
 
 app.post("/toggle-item/:id", async (req, res) => {
-  const foundTodos = await db
-    .select({
-      id: todos.id,
-      completed: todos.completed,
-    })
-    .from(todos)
-    .where(eq(todos.id, Number(req.params.id)));
-
-  if (foundTodos.length == 0) {
-    return res.status(404);
-  }
-
   const item = await db
     .update(todos)
     .set({
-      completed: !foundTodos[0].completed,
+      completed: sql`NOT ${todos.completed}`,
     })
+    .where(eq(todos.id, Number(req.params.id)))
     .returning();
 
   res.json(item);

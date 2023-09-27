@@ -1,8 +1,14 @@
-use actix_web::{web::{self, Json}, App, HttpResponse, HttpRequest, HttpServer, Responder};
+use actix_web::{web::{self}, App, HttpResponse, HttpServer, Responder};
 
 
 use sqlx::{PgPool};
 
+#[derive(serde::Serialize)]
+struct Todo {
+    id: i32,
+    description: String,
+    completed: bool,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
@@ -16,7 +22,7 @@ async fn main() -> Result<(), std::io::Error> {
       App::new()
             .app_data(connect.clone())
             .route("/get-items", web::get().to(get_items))
-            .route("/toggle-item", web::post().to(toggle_item))
+            .route("/toggle-item/{id}", web::post().to(toggle_item))
             .route("/create-item", web::post().to(create_item))
 
 
@@ -27,30 +33,56 @@ async fn main() -> Result<(), std::io::Error> {
 
 
 
-async fn get_items(_connection: web::Data<PgPool>) -> impl Responder {
-    HttpResponse::Ok().finish()
+async fn get_items(pool: web::Data<PgPool>) -> impl Responder {
+    match  sqlx::query_as!(
+        Todo,
+        r#"
+        SELECT * FROM todo
+        "#
+        )
+        .fetch_all(pool.get_ref())
+        .await {
+            Ok(result) => HttpResponse::Ok().json(result),
+            Err(e) => {println!("Error: {:?}", e); HttpResponse::InternalServerError().finish()}
+        }
 }
 
-async fn toggle_item(_connection: web::Data<PgPool>) -> impl Responder {
-    HttpResponse::Ok().finish()
+async fn toggle_item(path: web::Path<i32>, pool: web::Data<PgPool>) -> impl Responder {
+    match  sqlx::query_as!(
+        Todo,
+        r#"
+        UPDATE todo SET completed = NOT completed
+        WHERE id = $1
+        RETURNING *
+        "#,
+        path.into_inner())
+        .fetch_one(pool.get_ref())
+        .await {
+            Ok(result) => HttpResponse::Ok().json(result),
+            Err(e) => {println!("Error: {:?}", e); HttpResponse::InternalServerError().finish()}
+        }
 }
+    
+
 
 #[derive(serde::Deserialize)]
 struct CreateTodo {
     description: String,
 }
 
+
 async fn create_item(todo: web::Json<CreateTodo>, pool: web::Data<PgPool>) -> impl Responder {
-   match  sqlx::query!(
+   match  sqlx::query_as!(
+        Todo,
         r#"
         INSERT INTO todo (description)
         VALUES ($1)
-        RETURNING *
+        RETURNING id, description, completed
         "#,
         todo.description)
-        .execute(pool.get_ref())
+        .fetch_one(pool.get_ref())
         .await {
-            Ok(result) => HttpResponse::Ok().json(format!("{} rows affected", result.rows_affected())),
+            Ok(result) => HttpResponse::Ok().json(result),
             Err(e) => {println!("Error: {:?}", e); HttpResponse::InternalServerError().finish()}
         }
     
